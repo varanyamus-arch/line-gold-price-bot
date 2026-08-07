@@ -18,6 +18,12 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
   const isManualRequest = suppliedSecret === cronSecret;
 
   if (!cronSecret || (!isVercelCron && !isManualRequest)) {
+    console.warn("cron auth rejected", {
+      hasAuthorization: Boolean(authorization),
+      authorizationLength: authorization.length,
+      expectedAuthorizationLength: cronSecret ? `Bearer ${cronSecret}`.length : 0,
+      hasQueryKey: Boolean(suppliedSecret),
+    });
     res.writeHead(401, { "content-type": "application/json; charset=utf-8" });
     return res.end(JSON.stringify({ ok: false, message: "CRON_SECRET ไม่ถูกต้อง" }));
   }
