@@ -4,11 +4,5 @@
     "api/webhook.ts": { "maxDuration": 30 },
     "api/broadcast.ts": { "maxDuration": 30 },
     "api/status.ts": { "maxDuration": 10 }
-  },
-  "crons": [
-    {
-      "path": "/api/broadcast",
-      "schedule": "0 * * * *"
-    }
-  ]
+  }
 }
