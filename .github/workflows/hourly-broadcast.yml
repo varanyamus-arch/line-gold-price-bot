@@ -1,4 +1,5 @@
 name: Hourly gold price broadcast
+# Secret rotation verification
 
 on:
   schedule:
