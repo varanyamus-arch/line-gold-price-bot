@@ -1,5 +1,5 @@
 name: Hourly gold price broadcast
-# Secret rotation verification
+# Authentication diagnostics verification
 
 on:
   schedule:
