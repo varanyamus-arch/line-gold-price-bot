@@ -1,5 +1,5 @@
 name: Hourly gold price broadcast
-# Authentication diagnostics verification
+# Trimmed-secret verification
 
 on:
   schedule:
