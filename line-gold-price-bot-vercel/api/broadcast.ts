@@ -13,7 +13,11 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
   const suppliedSecret = requestUrl.searchParams.get("key") ?? "";
   const cronSecret = process.env.CRON_SECRET ?? "";
   const token = process.env.LINE_CHANNEL_ACCESS_TOKEN ?? "";
-  if (!cronSecret || suppliedSecret !== cronSecret) {
+  const authorization = req.headers.authorization ?? "";
+  const isVercelCron = authorization === `Bearer ${cronSecret}`;
+  const isManualRequest = suppliedSecret === cronSecret;
+
+  if (!cronSecret || (!isVercelCron && !isManualRequest)) {
     res.writeHead(401, { "content-type": "application/json; charset=utf-8" });
     return res.end(JSON.stringify({ ok: false, message: "CRON_SECRET ไม่ถูกต้อง" }));
   }
