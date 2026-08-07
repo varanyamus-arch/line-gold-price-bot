@@ -11,9 +11,9 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
 
   const requestUrl = new URL(req.url ?? "/", "https://localhost");
   const suppliedSecret = requestUrl.searchParams.get("key") ?? "";
-  const cronSecret = process.env.CRON_SECRET ?? "";
+  const cronSecret = (process.env.CRON_SECRET ?? "").trim();
   const token = process.env.LINE_CHANNEL_ACCESS_TOKEN ?? "";
-  const authorization = req.headers.authorization ?? "";
+  const authorization = (req.headers.authorization ?? "").trim();
   const isVercelCron = authorization === `Bearer ${cronSecret}`;
   const isManualRequest = suppliedSecret === cronSecret;
 
