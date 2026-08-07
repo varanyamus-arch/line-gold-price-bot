@@ -1,0 +1,16 @@
+name: Hourly gold price broadcast
+
+on:
+  schedule:
+    - cron: "0 * * * *"
+  workflow_dispatch:
+
+jobs:
+  broadcast:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send LINE gold price broadcast
+        run: |
+          curl --fail --silent --show-error \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            "https://line-gold-price-bot-gamma.vercel.app/api/broadcast"
