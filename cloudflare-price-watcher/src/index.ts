@@ -8,7 +8,7 @@ interface Price {
 }
 
 interface Env {
-  ANNOUNCEMENT_STATE: KVNamespace;
+  GOLD_BOT_KV: KVNamespace;
   VERCEL_BASE_URL: string;
   CRON_SECRET: string;
 }
@@ -24,7 +24,7 @@ async function checkForAnnouncement(env: Env) {
   const payload = await latestResponse.json<{ ok: boolean; price: Price }>();
   if (!payload.ok || !payload.price?.signature) throw new Error("latest endpoint returned invalid data");
 
-  const previousSignature = await env.ANNOUNCEMENT_STATE.get(SIGNATURE_KEY);
+  const previousSignature = await env.GOLD_BOT_KV.get(SIGNATURE_KEY);
   if (previousSignature === payload.price.signature) {
     return { ok: true, sent: false, reason: "unchanged", signature: payload.price.signature };
   }
@@ -32,8 +32,8 @@ async function checkForAnnouncement(env: Env) {
   const broadcastResponse = await fetch(`${env.VERCEL_BASE_URL}/api/broadcast`, { headers });
   if (!broadcastResponse.ok) throw new Error(`broadcast endpoint returned ${broadcastResponse.status}`);
 
-  await env.ANNOUNCEMENT_STATE.put(SIGNATURE_KEY, payload.price.signature);
-  await env.ANNOUNCEMENT_STATE.put(RECORD_KEY, JSON.stringify({ ...payload.price, savedAt: new Date().toISOString() }));
+  await env.GOLD_BOT_KV.put(SIGNATURE_KEY, payload.price.signature);
+  await env.GOLD_BOT_KV.put(RECORD_KEY, JSON.stringify({ ...payload.price, savedAt: new Date().toISOString() }));
   return { ok: true, sent: true, reason: "new-announcement", signature: payload.price.signature };
 }
 
@@ -45,7 +45,7 @@ export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
     if (url.pathname === "/status") {
-      const record = await env.ANNOUNCEMENT_STATE.get(RECORD_KEY, "json");
+      const record = await env.GOLD_BOT_KV.get(RECORD_KEY, "json");
       return Response.json({ ok: true, schedule: "every-minute", latest: record });
     }
     if (url.pathname === "/check") {
