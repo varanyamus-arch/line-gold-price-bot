@@ -21,6 +21,23 @@ function findPrice(text: string, patterns: RegExp[]): number | null {
   return null;
 }
 
+function normalizeDate(value: string): string {
+  return value.replace(/\s+/g, " ").trim();
+}
+
+function normalizeTime(value: string): string {
+  return value.replace(".", ":").padStart(5, "0");
+}
+
+export function createAnnouncementSignature(
+  announcedDate: string,
+  round: number,
+  barBuy: number,
+  barSell: number,
+): string {
+  return `${normalizeDate(announcedDate)}|${round}|${barBuy}|${barSell}`;
+}
+
 export function parseGoldPriceHtml(html: string, now = new Date()): GoldPrice {
   const $ = cheerio.load(html);
   const text = $("body").text().replace(/\s+/g, " ").trim();
@@ -48,14 +65,29 @@ export function parseGoldPriceHtml(html: string, now = new Date()): GoldPrice {
     throw new Error("ไม่พบราคาทองครบ 4 ช่อง อาจมีการเปลี่ยนรูปแบบเว็บไซต์ต้นทาง");
   }
 
-  const announcedAt = text.match(/ประจำวันที่\s*([^()]{1,80}?)(?:\(ครั้งที่|บาทละ)/)?.[1]?.trim();
-  const round = text.match(/ครั้งที่\s*(\d+)/)?.[1];
+  const dateMatch = text.match(/ประจำวันที่\s*(?:วันที่\s*)?([0-3]?\d(?:\s+|\/|-)[^()]{1,45}?\d{4})\s*(?=เวลา|ณ เวลา|\(|ครั้งที่)/);
+  const timeMatch = text.match(/(?:ณ\s*)?เวลา\s*([0-2]?\d[:.]\d{2})\s*น?\.?/);
+  const roundMatch = text.match(/ครั้งที่\s*(\d+)/);
+
+  if (!dateMatch || !timeMatch || !roundMatch) {
+    throw new Error("ไม่พบวันที่ เวลา หรือครั้งที่ประกาศจากเว็บไซต์ต้นทาง");
+  }
+
+  const announcedDate = normalizeDate(dateMatch[1]);
+  const announcedTime = normalizeTime(timeMatch[1]);
+  const round = Number(roundMatch[1]);
+  const signature = createAnnouncementSignature(announcedDate, round, barBuy!, barSell!);
+
   return {
-    barBuy: barBuy!, barSell: barSell!, ornamentBase: ornamentBase!, ornamentSell: ornamentSell!,
-    announcedAt: announcedAt || new Intl.DateTimeFormat("th-TH", {
-      dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Bangkok",
-    }).format(now),
-    round: round ? Number(round) : null,
+    barBuy: barBuy!,
+    barSell: barSell!,
+    ornamentBase: ornamentBase!,
+    ornamentSell: ornamentSell!,
+    announcedDate,
+    announcedTime,
+    announcedAt: `${announcedDate} ${announcedTime} น.`,
+    round,
+    signature,
     sourceUrl: SOURCE_URL,
     fetchedAt: now.toISOString(),
   };
@@ -64,9 +96,11 @@ export function parseGoldPriceHtml(html: string, now = new Date()): GoldPrice {
 export async function fetchGoldPrice(): Promise<GoldPrice> {
   const response = await fetch(SOURCE_URL, {
     headers: {
-      "user-agent": "GoldPriceLineBot/1.0",
+      "user-agent": "GoldPriceLineBot/2.0",
       "accept-language": "th-TH,th;q=0.9,en;q=0.8",
+      "cache-control": "no-cache",
     },
+    cache: "no-store",
     signal: AbortSignal.timeout(15_000),
   });
   if (!response.ok) throw new Error(`เว็บไซต์ราคาทองตอบกลับ HTTP ${response.status}`);

@@ -1,0 +1,21 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "gold-announcement-watcher",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-08-13",
+  "triggers": {
+    "crons": ["* * * * *"]
+  },
+  "vars": {
+    "VERCEL_BASE_URL": "https://line-gold-price-bot-gamma.vercel.app"
+  },
+  "kv_namespaces": [
+    {
+      "binding": "ANNOUNCEMENT_STATE",
+      "id": "REPLACE_WITH_KV_NAMESPACE_ID"
+    }
+  ],
+  "observability": {
+    "enabled": true
+  }
+}

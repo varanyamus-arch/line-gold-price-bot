@@ -3,8 +3,11 @@ export interface GoldPrice {
   barSell: number;
   ornamentBase: number;
   ornamentSell: number;
+  announcedDate: string;
+  announcedTime: string;
   announcedAt: string;
-  round: number | null;
+  round: number;
+  signature: string;
   sourceUrl: string;
   fetchedAt: string;
 }

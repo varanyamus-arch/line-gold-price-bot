@@ -1,0 +1,14 @@
+{
+  "name": "gold-announcement-watcher",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "check": "tsc --noEmit",
+    "deploy": "wrangler deploy"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20260813.1",
+    "typescript": "^5.9.3",
+    "wrangler": "^4.122.0"
+  }
+}
