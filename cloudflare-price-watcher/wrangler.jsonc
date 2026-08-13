@@ -1,6 +1,6 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "gold-announcement-watcher",
+  "name": "gold-line-bot",
   "main": "src/index.ts",
   "compatibility_date": "2026-08-13",
   "triggers": {
@@ -11,7 +11,7 @@
   },
   "kv_namespaces": [
     {
-      "binding": "ANNOUNCEMENT_STATE",
+      "binding": "GOLD_BOT_KV",
       "id": "261cfdb2d36841dbb784bf7148c24add"
     }
   ],
