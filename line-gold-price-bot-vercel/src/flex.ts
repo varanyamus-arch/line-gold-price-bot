@@ -2,6 +2,7 @@ import type { messagingApi } from "@line/bot-sdk";
 import type { GoldPrice } from "./types.js";
 
 const baht = (value: number) => new Intl.NumberFormat("th-TH", { maximumFractionDigits: 0 }).format(value);
+const logoUrl = "https://line-gold-price-bot-gamma.vercel.app/kaewmanee-logo.png";
 
 export function goldPriceFlex(price: GoldPrice): messagingApi.FlexMessage {
   return {
@@ -12,11 +13,28 @@ export function goldPriceFlex(price: GoldPrice): messagingApi.FlexMessage {
       size: "mega",
       header: {
         type: "box",
-        layout: "vertical",
-        backgroundColor: "#725500",
-        paddingAll: "22px",
+        layout: "horizontal",
+        backgroundColor: "#2A1D20",
+        paddingAll: "18px",
         contents: [
-          { type: "text", text: "ราคาทองคำวันนี้", color: "#F9E7A5", weight: "bold", size: "xl" },
+          {
+            type: "box",
+            layout: "vertical",
+            flex: 3,
+            justifyContent: "center",
+            contents: [
+              { type: "text", text: "ราคาทองคำวันนี้", color: "#F9E7A5", weight: "bold", size: "xl", wrap: true },
+            ],
+          },
+          {
+            type: "image",
+            url: logoUrl,
+            flex: 2,
+            size: "full",
+            aspectMode: "fit",
+            aspectRatio: "1:1",
+            gravity: "center",
+          },
         ],
       },
       body: {
