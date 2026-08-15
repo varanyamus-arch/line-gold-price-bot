@@ -15,10 +15,61 @@ interface Env {
 
 const SIGNATURE_KEY = "latest-announcement-signature";
 const RECORD_KEY = "latest-announcement-record";
+const AUTH_KEY_PAIR_KEY = "worker-auth-key-pair";
+
+interface StoredKeyPair {
+  privateKey: JsonWebKey;
+  publicKey: JsonWebKey;
+}
+
+const toBase64Url = (value: ArrayBuffer): string => {
+  const bytes = new Uint8Array(value);
+  let binary = "";
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+};
+
+async function ensureAuthKeyPair(env: Env): Promise<StoredKeyPair> {
+  const stored = await env.GOLD_BOT_KV.get<StoredKeyPair>(AUTH_KEY_PAIR_KEY, "json");
+  if (stored?.privateKey && stored?.publicKey) return stored;
+
+  const pair = await crypto.subtle.generateKey(
+    { name: "ECDSA", namedCurve: "P-256" },
+    true,
+    ["sign", "verify"],
+  ) as CryptoKeyPair;
+  const created = {
+    privateKey: await crypto.subtle.exportKey("jwk", pair.privateKey) as JsonWebKey,
+    publicKey: await crypto.subtle.exportKey("jwk", pair.publicKey) as JsonWebKey,
+  };
+  await env.GOLD_BOT_KV.put(AUTH_KEY_PAIR_KEY, JSON.stringify(created));
+  return created;
+}
+
+async function signedBroadcastHeaders(env: Env): Promise<Record<string, string>> {
+  const timestamp = Date.now().toString();
+  const message = `${timestamp}\nGET\n/api/broadcast`;
+  const pair = await ensureAuthKeyPair(env);
+  const privateKey = await crypto.subtle.importKey(
+    "jwk",
+    pair.privateKey,
+    { name: "ECDSA", namedCurve: "P-256" },
+    false,
+    ["sign"],
+  );
+  const signature = await crypto.subtle.sign(
+    { name: "ECDSA", hash: "SHA-256" },
+    privateKey,
+    new TextEncoder().encode(message),
+  );
+  return {
+    "x-gold-timestamp": timestamp,
+    "x-gold-signature": toBase64Url(signature),
+  };
+}
 
 async function checkForAnnouncement(env: Env) {
-  const headers = { authorization: `Bearer ${env.CRON_SECRET}` };
-  const latestResponse = await fetch(`${env.VERCEL_BASE_URL}/api/latest`, { headers });
+  const latestResponse = await fetch(`${env.VERCEL_BASE_URL}/api/latest`);
   if (!latestResponse.ok) throw new Error(`latest endpoint returned ${latestResponse.status}`);
 
   const payload = await latestResponse.json<{ ok: boolean; price: Price }>();
@@ -29,7 +80,9 @@ async function checkForAnnouncement(env: Env) {
     return { ok: true, sent: false, reason: "unchanged", signature: payload.price.signature };
   }
 
-  const broadcastResponse = await fetch(`${env.VERCEL_BASE_URL}/api/broadcast`, { headers });
+  const broadcastResponse = await fetch(`${env.VERCEL_BASE_URL}/api/broadcast`, {
+    headers: await signedBroadcastHeaders(env),
+  });
   if (!broadcastResponse.ok) throw new Error(`broadcast endpoint returned ${broadcastResponse.status}`);
 
   await env.GOLD_BOT_KV.put(SIGNATURE_KEY, payload.price.signature);
@@ -47,6 +100,10 @@ export default {
     if (url.pathname === "/status") {
       const record = await env.GOLD_BOT_KV.get(RECORD_KEY, "json");
       return Response.json({ ok: true, schedule: "every-minute", latest: record });
+    }
+    if (url.pathname === "/public-key") {
+      const { publicKey } = await ensureAuthKeyPair(env);
+      return Response.json({ ok: true, publicKey });
     }
     if (url.pathname === "/check") {
       if (request.headers.get("authorization") !== `Bearer ${env.CRON_SECRET}`) {

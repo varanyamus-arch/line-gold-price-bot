@@ -1,5 +1,6 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { messagingApi } from "@line/bot-sdk";
+import { verifyCloudflareSignature } from "../src/cloudflare-auth.js";
 import { goldPriceFlex } from "../src/flex.js";
 import { fetchGoldPrice } from "../src/scraper.js";
 
@@ -14,18 +15,18 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
   const cronSecret = (process.env.CRON_SECRET ?? "").trim();
   const token = process.env.LINE_CHANNEL_ACCESS_TOKEN ?? "";
   const authorization = (req.headers.authorization ?? "").trim();
-  const isVercelCron = authorization === `Bearer ${cronSecret}`;
-  const isManualRequest = suppliedSecret === cronSecret;
+  const isSecretAuthorized = Boolean(cronSecret) && (
+    authorization === `Bearer ${cronSecret}` || suppliedSecret === cronSecret
+  );
+  const isCloudflareAuthorized = await verifyCloudflareSignature(
+    req.method,
+    String(req.headers["x-gold-timestamp"] ?? ""),
+    String(req.headers["x-gold-signature"] ?? ""),
+  );
 
-  if (!cronSecret || (!isVercelCron && !isManualRequest)) {
-    console.warn("cron auth rejected", {
-      hasAuthorization: Boolean(authorization),
-      authorizationLength: authorization.length,
-      expectedAuthorizationLength: cronSecret ? `Bearer ${cronSecret}`.length : 0,
-      hasQueryKey: Boolean(suppliedSecret),
-    });
+  if (!isSecretAuthorized && !isCloudflareAuthorized) {
     res.writeHead(401, { "content-type": "application/json; charset=utf-8" });
-    return res.end(JSON.stringify({ ok: false, message: "CRON_SECRET ไม่ถูกต้อง" }));
+    return res.end(JSON.stringify({ ok: false, message: "ไม่ผ่านการยืนยันตัวตน" }));
   }
   if (!token) {
     res.writeHead(500, { "content-type": "application/json; charset=utf-8" });
@@ -37,7 +38,13 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     const client = new messagingApi.MessagingApiClient({ channelAccessToken: token });
     await client.broadcast({ messages: [goldPriceFlex(price)] });
     res.writeHead(200, { "content-type": "application/json; charset=utf-8" });
-    return res.end(JSON.stringify({ ok: true, announcedAt: price.announcedAt, round: price.round }));
+    return res.end(JSON.stringify({
+      ok: true,
+      announcedDate: price.announcedDate,
+      announcedTime: price.announcedTime,
+      round: price.round,
+      signature: price.signature,
+    }));
   } catch (error) {
     console.error("broadcast error", error);
     res.writeHead(500, { "content-type": "application/json; charset=utf-8" });

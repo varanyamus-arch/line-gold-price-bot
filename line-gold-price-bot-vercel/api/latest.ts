@@ -7,18 +7,11 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     return res.end(JSON.stringify({ ok: false, message: "Method ไม่ถูกต้อง" }));
   }
 
-  const cronSecret = (process.env.CRON_SECRET ?? "").trim();
-  const authorization = (req.headers.authorization ?? "").trim();
-  if (!cronSecret || authorization !== `Bearer ${cronSecret}`) {
-    res.writeHead(401, { "content-type": "application/json; charset=utf-8" });
-    return res.end(JSON.stringify({ ok: false, message: "CRON_SECRET ไม่ถูกต้อง" }));
-  }
-
   try {
     const price = await fetchGoldPrice();
     res.writeHead(200, {
       "content-type": "application/json; charset=utf-8",
-      "cache-control": "no-store, max-age=0",
+      "cache-control": "public, s-maxage=30, stale-while-revalidate=30",
     });
     return res.end(JSON.stringify({ ok: true, price }));
   } catch (error) {
