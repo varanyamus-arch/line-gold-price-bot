@@ -1,6 +1,7 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { messagingApi, validateSignature, type WebhookEvent } from "@line/bot-sdk";
 import { goldPriceFlex } from "../src/flex.js";
+import { fetchMarketSnapshot } from "../src/market.js";
 import { fetchGoldPrice } from "../src/scraper.js";
 
 function json(res: ServerResponse, status: number, body: object) {
@@ -63,8 +64,11 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
       }
 
       try {
-        const price = await fetchGoldPrice();
-        await client.replyMessage({ replyToken: event.replyToken, messages: [goldPriceFlex(price)] });
+        const [price, market] = await Promise.all([fetchGoldPrice(), fetchMarketSnapshot()]);
+        await client.replyMessage({
+          replyToken: event.replyToken,
+          messages: [goldPriceFlex({ ...price, ...market })],
+        });
       } catch (error) {
         console.error("price/reply error", error);
         await client.replyMessage({
