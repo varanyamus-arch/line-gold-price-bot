@@ -1,7 +1,14 @@
 const MAX_CLOCK_SKEW_MS = 2 * 60 * 1000;
 
-// Filled after the Worker creates its private/public key pair in Cloudflare KV.
-export const CLOUDFLARE_PUBLIC_KEY: JsonWebKey | null = null;
+// Public half of the signing key generated and retained by the Cloudflare Worker in KV.
+export const CLOUDFLARE_PUBLIC_KEY: JsonWebKey = {
+  kty: "EC",
+  key_ops: ["verify"],
+  ext: true,
+  crv: "P-256",
+  x: "OfmBFWCio0ZlFrL5Li0lX_vZsFzABj_bJ3-ZkEPg_bw",
+  y: "wjnEenUES7dr0llKh-PTWNQfRqFtFrdJwRhy70evMlo",
+};
 
 function fromBase64Url(value: string): ArrayBuffer {
   const bytes = Buffer.from(value, "base64url");
