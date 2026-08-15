@@ -1,10 +1,14 @@
 import type { messagingApi } from "@line/bot-sdk";
-import type { GoldPrice } from "./types.js";
+import type { GoldPriceNotification } from "./types.js";
 
 const baht = (value: number) => new Intl.NumberFormat("th-TH", { maximumFractionDigits: 0 }).format(value);
+const market = (value: number) => new Intl.NumberFormat("en-US", {
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+}).format(value);
 const logoUrl = "https://line-gold-price-bot-gamma.vercel.app/kaewmanee-logo.png";
 
-export function goldPriceFlex(price: GoldPrice): messagingApi.FlexMessage {
+export function goldPriceFlex(price: GoldPriceNotification): messagingApi.FlexMessage {
   return {
     type: "flex",
     altText: `ประกาศครั้งที่ ${price.round} เวลา ${price.announcedTime} น. ทองแท่งรับซื้อ ${baht(price.barBuy)} ขายออก ${baht(price.barSell)} บาท`,
@@ -57,6 +61,34 @@ export function goldPriceFlex(price: GoldPrice): messagingApi.FlexMessage {
           },
           { type: "separator", margin: "xxl" },
           {
+            type: "box",
+            layout: "horizontal",
+            margin: "xl",
+            contents: [
+              {
+                type: "box",
+                layout: "vertical",
+                flex: 1,
+                contents: [
+                  { type: "text", text: "GOLD SPOT", weight: "bold", color: "#62430B", size: "sm" },
+                  { type: "text", text: market(price.goldSpotUsd), weight: "bold", color: "#725500", size: "lg", margin: "sm" },
+                  { type: "text", text: "ดอลลาร์/ออนซ์", color: "#8A7040", size: "xxs", margin: "xs" },
+                ],
+              },
+              {
+                type: "box",
+                layout: "vertical",
+                flex: 1,
+                contents: [
+                  { type: "text", text: "USD/THB", weight: "bold", color: "#62430B", size: "sm", align: "end" },
+                  { type: "text", text: market(price.usdThb), weight: "bold", color: "#725500", size: "lg", align: "end", margin: "sm" },
+                  { type: "text", text: "บาท/ดอลลาร์", color: "#8A7040", size: "xxs", align: "end", margin: "xs" },
+                ],
+              },
+            ],
+          },
+          { type: "separator", margin: "xxl" },
+          {
             type: "text",
             text: `ประกาศครั้งที่ ${price.round} • ${price.announcedTime} น.`,
             weight: "bold",
@@ -67,6 +99,7 @@ export function goldPriceFlex(price: GoldPrice): messagingApi.FlexMessage {
           },
           { type: "text", text: `ประจำวันที่ ${price.announcedDate}`, color: "#725523", size: "sm", align: "center", margin: "lg" },
           { type: "text", text: "อ้างอิงข้อมูล: สมาคมค้าทองคำ", color: "#725523", size: "xs", align: "center", margin: "lg" },
+          { type: "text", text: "ข้อมูลตลาด: Gold API • ExchangeRate-API", color: "#8A7040", size: "xxs", align: "center", margin: "sm" },
           { type: "text", text: "บอทแจ้งเตือนอัตโนมัติ — ไม่มีการตอบแชท", color: "#725523", size: "xs", align: "center", margin: "md" },
         ],
       },

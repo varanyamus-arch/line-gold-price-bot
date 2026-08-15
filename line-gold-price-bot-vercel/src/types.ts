@@ -11,3 +11,11 @@ export interface GoldPrice {
   sourceUrl: string;
   fetchedAt: string;
 }
+
+export interface MarketSnapshot {
+  goldSpotUsd: number;
+  usdThb: number;
+  marketFetchedAt: string;
+}
+
+export type GoldPriceNotification = GoldPrice & MarketSnapshot;

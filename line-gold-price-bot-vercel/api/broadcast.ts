@@ -2,6 +2,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import { messagingApi } from "@line/bot-sdk";
 import { verifyCloudflareSignature } from "../src/cloudflare-auth.js";
 import { goldPriceFlex } from "../src/flex.js";
+import { fetchMarketSnapshot } from "../src/market.js";
 import { fetchGoldPrice } from "../src/scraper.js";
 
 export default async function handler(req: IncomingMessage, res: ServerResponse) {
@@ -34,9 +35,10 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
   }
 
   try {
-    const price = await fetchGoldPrice();
+    const [price, market] = await Promise.all([fetchGoldPrice(), fetchMarketSnapshot()]);
+    const notification = { ...price, ...market };
     const client = new messagingApi.MessagingApiClient({ channelAccessToken: token });
-    await client.broadcast({ messages: [goldPriceFlex(price)] });
+    await client.broadcast({ messages: [goldPriceFlex(notification)] });
     res.writeHead(200, { "content-type": "application/json; charset=utf-8" });
     return res.end(JSON.stringify({
       ok: true,
@@ -44,6 +46,8 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
       announcedTime: price.announcedTime,
       round: price.round,
       signature: price.signature,
+      goldSpotUsd: market.goldSpotUsd,
+      usdThb: market.usdThb,
     }));
   } catch (error) {
     console.error("broadcast error", error);
