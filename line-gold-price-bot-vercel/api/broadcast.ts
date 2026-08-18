@@ -63,7 +63,13 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     }));
   } catch (error) {
     console.error("group push error", error);
-    res.writeHead(500, { "content-type": "application/json; charset=utf-8" });
-    return res.end(JSON.stringify({ ok: false, message: "ส่งแจ้งเตือนไม่สำเร็จ" }));
+    const status = typeof error === "object" && error !== null && "status" in error && typeof error.status === "number"
+      ? error.status
+      : 500;
+    res.writeHead(status, { "content-type": "application/json; charset=utf-8" });
+    return res.end(JSON.stringify({
+      ok: false,
+      message: status === 429 ? "LINE โควตารายเดือนเต็ม" : "ส่งแจ้งเตือนไม่สำเร็จ",
+    }));
   }
 }
