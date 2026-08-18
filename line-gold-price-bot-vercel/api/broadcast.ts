@@ -6,28 +6,40 @@ import { fetchMarketSnapshot } from "../src/market.js";
 import { fetchGoldPrice } from "../src/scraper.js";
 
 export default async function handler(req: IncomingMessage, res: ServerResponse) {
-  if (req.method !== "GET" && req.method !== "POST") {
-    res.writeHead(405, { "content-type": "application/json; charset=utf-8", allow: "GET, POST" });
+  if (req.method !== "POST") {
+    res.writeHead(405, { "content-type": "application/json; charset=utf-8", allow: "POST" });
     return res.end(JSON.stringify({ ok: false, message: "Method ไม่ถูกต้อง" }));
   }
 
-  const requestUrl = new URL(req.url ?? "/", "https://localhost");
-  const suppliedSecret = requestUrl.searchParams.get("key") ?? "";
-  const cronSecret = (process.env.CRON_SECRET ?? "").trim();
   const token = process.env.LINE_CHANNEL_ACCESS_TOKEN ?? "";
-  const authorization = (req.headers.authorization ?? "").trim();
-  const isSecretAuthorized = Boolean(cronSecret) && (
-    authorization === `Bearer ${cronSecret}` || suppliedSecret === cronSecret
-  );
+  const chunks: Buffer[] = [];
+  for await (const chunk of req) chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+  const rawBody = Buffer.concat(chunks).toString("utf8");
+  const bodyHash = String(req.headers["x-gold-body-sha256"] ?? "");
+  const calculatedBodyHash = Buffer.from(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(rawBody))).toString("base64url");
   const isCloudflareAuthorized = await verifyCloudflareSignature(
     req.method,
     String(req.headers["x-gold-timestamp"] ?? ""),
     String(req.headers["x-gold-signature"] ?? ""),
+    bodyHash,
   );
 
-  if (!isSecretAuthorized && !isCloudflareAuthorized) {
+  if (!isCloudflareAuthorized || bodyHash !== calculatedBodyHash) {
     res.writeHead(401, { "content-type": "application/json; charset=utf-8" });
     return res.end(JSON.stringify({ ok: false, message: "ไม่ผ่านการยืนยันตัวตน" }));
+  }
+
+  let to = "";
+  try {
+    const payload = JSON.parse(rawBody) as { to?: unknown };
+    to = typeof payload.to === "string" ? payload.to.trim() : "";
+  } catch {
+    res.writeHead(400, { "content-type": "application/json; charset=utf-8" });
+    return res.end(JSON.stringify({ ok: false, message: "JSON ไม่ถูกต้อง" }));
+  }
+  if (!/^C[0-9A-Za-z_-]{10,127}$/.test(to)) {
+    res.writeHead(400, { "content-type": "application/json; charset=utf-8" });
+    return res.end(JSON.stringify({ ok: false, message: "groupId ไม่ถูกต้อง" }));
   }
   if (!token) {
     res.writeHead(500, { "content-type": "application/json; charset=utf-8" });
@@ -38,7 +50,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     const [price, market] = await Promise.all([fetchGoldPrice(), fetchMarketSnapshot()]);
     const notification = { ...price, ...market };
     const client = new messagingApi.MessagingApiClient({ channelAccessToken: token });
-    await client.broadcast({ messages: [goldPriceFlex(notification)] });
+    await client.pushMessage({ to, messages: [goldPriceFlex(notification)] });
     res.writeHead(200, { "content-type": "application/json; charset=utf-8" });
     return res.end(JSON.stringify({
       ok: true,
@@ -50,7 +62,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
       usdThb: market.usdThb,
     }));
   } catch (error) {
-    console.error("broadcast error", error);
+    console.error("group push error", error);
     res.writeHead(500, { "content-type": "application/json; charset=utf-8" });
     return res.end(JSON.stringify({ ok: false, message: "ส่งแจ้งเตือนไม่สำเร็จ" }));
   }
