@@ -18,6 +18,7 @@ const SIGNATURE_KEY = "latest-announcement-signature";
 const RECORD_KEY = "latest-announcement-record";
 const AUTH_KEY_PAIR_KEY = "worker-auth-key-pair";
 const GROUP_ID_KEY = "line-group-id";
+const FLEX_SMOKE_TEST_KEY = "group-flex-smoke-test-20260818";
 
 interface StoredKeyPair {
   privateKey: JsonWebKey;
@@ -142,7 +143,7 @@ async function captureLineGroup(request: Request, env: Env): Promise<Response> {
   return Response.json({ ok: true, groupCaptured: Boolean(groupId) });
 }
 
-async function checkForAnnouncement(env: Env) {
+async function checkForAnnouncement(env: Env, force = false) {
   const latestResponse = await fetch(`${env.VERCEL_BASE_URL}/api/latest`);
   if (!latestResponse.ok) throw new Error(`latest endpoint returned ${latestResponse.status}`);
 
@@ -150,7 +151,7 @@ async function checkForAnnouncement(env: Env) {
   if (!payload.ok || !payload.price?.signature) throw new Error("latest endpoint returned invalid data");
 
   const previousSignature = await env.GOLD_BOT_KV.get(SIGNATURE_KEY);
-  if (previousSignature === payload.price.signature) {
+  if (!force && previousSignature === payload.price.signature) {
     return { ok: true, sent: false, reason: "unchanged", signature: payload.price.signature };
   }
 
@@ -174,7 +175,14 @@ async function checkForAnnouncement(env: Env) {
 
 export default {
   async scheduled(_event: ScheduledEvent, env: Env, ctx: ExecutionContext) {
-    ctx.waitUntil(checkForAnnouncement(env));
+    ctx.waitUntil((async () => {
+      const smokeTestCompleted = Boolean(await env.GOLD_BOT_KV.get(FLEX_SMOKE_TEST_KEY));
+      const result = await checkForAnnouncement(env, !smokeTestCompleted);
+      if (!smokeTestCompleted && result.sent) {
+        await env.GOLD_BOT_KV.put(FLEX_SMOKE_TEST_KEY, new Date().toISOString());
+      }
+      return result;
+    })());
   },
 
   async fetch(request: Request, env: Env): Promise<Response> {
@@ -185,7 +193,8 @@ export default {
     if (url.pathname === "/status") {
       const record = await env.GOLD_BOT_KV.get(RECORD_KEY, "json");
       const groupConfigured = Boolean(await env.GOLD_BOT_KV.get(GROUP_ID_KEY));
-      return Response.json({ ok: true, schedule: "every-minute", groupConfigured, latest: record });
+      const smokeTestCompleted = Boolean(await env.GOLD_BOT_KV.get(FLEX_SMOKE_TEST_KEY));
+      return Response.json({ ok: true, schedule: "every-minute", groupConfigured, smokeTestCompleted, latest: record });
     }
     if (url.pathname === "/public-key") {
       const { publicKey } = await ensureAuthKeyPair(env);
