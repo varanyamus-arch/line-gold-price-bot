@@ -19,10 +19,11 @@ export async function verifyCloudflareSignature(
   method: string,
   timestamp: string,
   signature: string,
+  bodyHash = "",
   publicKey: JsonWebKey | null = CLOUDFLARE_PUBLIC_KEY,
   now = Date.now(),
 ): Promise<boolean> {
-  if (!publicKey || !timestamp || !signature || !/^\d{13}$/.test(timestamp)) return false;
+  if (!publicKey || !timestamp || !signature || !bodyHash || !/^\d{13}$/.test(timestamp)) return false;
   if (Math.abs(now - Number(timestamp)) > MAX_CLOCK_SKEW_MS) return false;
 
   try {
@@ -33,7 +34,7 @@ export async function verifyCloudflareSignature(
       false,
       ["verify"],
     );
-    const message = `${timestamp}\n${method.toUpperCase()}\n/api/broadcast`;
+    const message = `${timestamp}\n${method.toUpperCase()}\n/api/broadcast\n${bodyHash}`;
     return await crypto.subtle.verify(
       { name: "ECDSA", hash: "SHA-256" },
       key,
