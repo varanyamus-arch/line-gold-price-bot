@@ -19,6 +19,7 @@ const RECORD_KEY = "latest-announcement-record";
 const AUTH_KEY_PAIR_KEY = "worker-auth-key-pair";
 const GROUP_ID_KEY = "line-group-id";
 const FLEX_SMOKE_TEST_KEY = "group-flex-smoke-test-20260818";
+const PUSH_PAUSE_KEY = "line-push-paused";
 
 interface StoredKeyPair {
   privateKey: JsonWebKey;
@@ -144,6 +145,11 @@ async function captureLineGroup(request: Request, env: Env): Promise<Response> {
 }
 
 async function checkForAnnouncement(env: Env, force = false) {
+  const pushPaused = await env.GOLD_BOT_KV.get(PUSH_PAUSE_KEY, "json");
+  if (pushPaused) {
+    return { ok: false, sent: false, reason: "line-push-paused" };
+  }
+
   const latestResponse = await fetch(`${env.VERCEL_BASE_URL}/api/latest`);
   if (!latestResponse.ok) throw new Error(`latest endpoint returned ${latestResponse.status}`);
 
@@ -166,6 +172,13 @@ async function checkForAnnouncement(env: Env, force = false) {
     headers: await signedBroadcastHeaders(env, body),
     body,
   });
+  if (broadcastResponse.status === 429) {
+    await env.GOLD_BOT_KV.put(PUSH_PAUSE_KEY, JSON.stringify({
+      reason: "monthly-limit",
+      pausedAt: new Date().toISOString(),
+    }));
+    return { ok: false, sent: false, reason: "line-monthly-limit", signature: payload.price.signature };
+  }
   if (!broadcastResponse.ok) throw new Error(`broadcast endpoint returned ${broadcastResponse.status}`);
 
   await env.GOLD_BOT_KV.put(SIGNATURE_KEY, payload.price.signature);
@@ -194,7 +207,8 @@ export default {
       const record = await env.GOLD_BOT_KV.get(RECORD_KEY, "json");
       const groupConfigured = Boolean(await env.GOLD_BOT_KV.get(GROUP_ID_KEY));
       const smokeTestCompleted = Boolean(await env.GOLD_BOT_KV.get(FLEX_SMOKE_TEST_KEY));
-      return Response.json({ ok: true, schedule: "every-minute", groupConfigured, smokeTestCompleted, latest: record });
+      const pushPaused = await env.GOLD_BOT_KV.get(PUSH_PAUSE_KEY, "json");
+      return Response.json({ ok: true, schedule: "every-minute", groupConfigured, smokeTestCompleted, pushPaused, latest: record });
     }
     if (url.pathname === "/public-key") {
       const { publicKey } = await ensureAuthKeyPair(env);
