@@ -16,6 +16,7 @@ interface Env {
 const SIGNATURE_KEY = "latest-announcement-signature";
 const RECORD_KEY = "latest-announcement-record";
 const AUTH_KEY_PAIR_KEY = "worker-auth-key-pair";
+const ONE_TIME_BROADCAST_TEST_KEY = "one-time-broadcast-test-20260822";
 
 interface StoredKeyPair {
   privateKey: JsonWebKey;
@@ -68,7 +69,7 @@ async function signedBroadcastHeaders(env: Env): Promise<Record<string, string>>
   };
 }
 
-async function checkForAnnouncement(env: Env) {
+async function checkForAnnouncement(env: Env, force = false) {
   const latestResponse = await fetch(`${env.VERCEL_BASE_URL}/api/latest`);
   if (!latestResponse.ok) throw new Error(`latest endpoint returned ${latestResponse.status}`);
 
@@ -76,7 +77,7 @@ async function checkForAnnouncement(env: Env) {
   if (!payload.ok || !payload.price?.signature) throw new Error("latest endpoint returned invalid data");
 
   const previousSignature = await env.GOLD_BOT_KV.get(SIGNATURE_KEY);
-  if (previousSignature === payload.price.signature) {
+  if (!force && previousSignature === payload.price.signature) {
     return { ok: true, sent: false, reason: "unchanged", signature: payload.price.signature };
   }
 
@@ -92,14 +93,22 @@ async function checkForAnnouncement(env: Env) {
 
 export default {
   async scheduled(_event: ScheduledEvent, env: Env, ctx: ExecutionContext) {
-    ctx.waitUntil(checkForAnnouncement(env));
+    ctx.waitUntil((async () => {
+      const testCompleted = Boolean(await env.GOLD_BOT_KV.get(ONE_TIME_BROADCAST_TEST_KEY));
+      const result = await checkForAnnouncement(env, !testCompleted);
+      if (!testCompleted && result.sent) {
+        await env.GOLD_BOT_KV.put(ONE_TIME_BROADCAST_TEST_KEY, new Date().toISOString());
+      }
+      return result;
+    })());
   },
 
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
     if (url.pathname === "/status") {
       const record = await env.GOLD_BOT_KV.get(RECORD_KEY, "json");
-      return Response.json({ ok: true, schedule: "every-minute", latest: record });
+      const testCompleted = Boolean(await env.GOLD_BOT_KV.get(ONE_TIME_BROADCAST_TEST_KEY));
+      return Response.json({ ok: true, schedule: "every-minute", testCompleted, latest: record });
     }
     if (url.pathname === "/public-key") {
       const { publicKey } = await ensureAuthKeyPair(env);
