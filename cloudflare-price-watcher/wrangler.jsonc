@@ -4,7 +4,7 @@
   "main": "src/index.ts",
   "compatibility_date": "2026-08-13",
   "triggers": {
-    "crons": ["* * * * *"]
+    "crons": []
   },
   "vars": {
     "VERCEL_BASE_URL": "https://line-gold-price-bot-gamma.vercel.app"
